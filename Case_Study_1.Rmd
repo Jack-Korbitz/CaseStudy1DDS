@@ -1,0 +1,580 @@
+---
+title: "Doing Data Science Case Study 1"
+author: "Jack Korbitz"
+date: "2024-10-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Case Study 1
+
+## Main Points:
+
+|  |
+|:-----------------------------------------------------------------------|
+| 1\. Find the top three factors that contribute to Attrition |
+| 2\. The business is also interested in learning about any job role specific trends that may exist in the data set |
+| 3\. Provide any other interesting trends and observations from your analysis |
+| 4\. Build a model to predict attrition |
+
+## Load Packages
+```{r}
+library(tidyverse)
+library(plotly)
+library(e1071) # naiveBayes
+library(caret) #cm tables
+library(ggthemes)
+library(scales)
+```
+
+## Load Data
+```{r}
+# load data
+Attrition = read.csv("/Users/jackkorbitz/School/MSDS_6306/Unit 8/CaseStudy1-data.csv",header = TRUE)
+
+# Check data structure
+str(Attrition)
+
+# Check data summary
+summary(Attrition)
+
+# Check for missing values
+sum(is.na(Attrition))
+```
+
+## Explore different reasons for Attrition
+```{r}
+# Department Highest %: 21.61 @ 3 variables (Good Variable)
+table(Attrition$Department,Attrition$Attrition)
+Department_atr = table(Attrition$Department,Attrition$Attrition)
+Department_atr_dist = prop.table(Department_atr, 1) *100
+Department_atr_dist
+
+# Age banded distribution: high for younger ages, not the best variable to use
+Attrition$Age_Band <- cut(Attrition$Age, 
+                         breaks = c(0, 29, 49,  60), 
+                         labels = c("18-29", "30-49", "50-60"))
+
+table(Attrition$Age_Band,Attrition$Attrition)
+Age_atr = table(Attrition$Age_Band,Attrition$Attrition)
+Age_atr_dist = prop.table(Age_atr, 1) *100
+Age_atr_dist
+
+# BusinessTravel Highest %: 22.15190 @ 3 variables
+table(Attrition$BusinessTravel,Attrition$Attrition)
+BusinessTravel_atr = table(Attrition$BusinessTravel,Attrition$Attrition)
+BusinessTravel_atr_dist = prop.table(BusinessTravel_atr, 1) *100
+BusinessTravel_atr_dist
+
+# DistanceFromHome Highest %: 23.62205 @ 3 variables
+Attrition$Distance_Band = cut(Attrition$DistanceFromHome, 
+                         breaks = c(1, 10, 20, 30), 
+                         labels = c("1-10", "11-20", "21-30"))
+table(Attrition$Distance_Band,Attrition$Attrition)
+DistanceFromHome_atr = table(Attrition$Distance_Band,Attrition$Attrition)
+DistanceFromHome_atr_dist = prop.table(DistanceFromHome_atr, 1) *100
+DistanceFromHome_atr_dist
+
+# Education %: 18.36735 @ 5 variables (less education = higher turn)
+table(Attrition$Education,Attrition$Attrition)
+Education_atr = table(Attrition$Education,Attrition$Attrition)
+Education_atr_dist = prop.table(Education_atr, 1) *100
+Education_atr_dist
+
+# EducationField %: 26.66667% @ 6 variable (Higher on lower counts)
+table(Attrition$EducationField,Attrition$Attrition)
+EducationField_atr = table(Attrition$EducationField,Attrition$Attrition)
+EducationField_atr_dist = prop.table(EducationField_atr, 1) *100
+EducationField_atr_dist
+
+# EnvironmentSatisfaction %: 24.41860% @ 4 variables (highest at lowest and highest satisfaction, maybe needs a second variable)
+table(Attrition$EnvironmentSatisfaction,Attrition$Attrition)
+EnvironmentSatisfaction_atr = table(Attrition$EnvironmentSatisfaction,Attrition$Attrition)
+EnvironmentSatisfaction_atr_dist = prop.table(EnvironmentSatisfaction_atr, 1) *100
+EnvironmentSatisfaction_atr_dist
+
+# Gender %: 16.86047% @ 2 variables (not useful by itself stand alone)
+table(Attrition$Gender,Attrition$Attrition)
+Gender_atr = table(Attrition$Gender,Attrition$Attrition)
+Gender_atr_dist = prop.table(Gender_atr, 1) *100
+Gender_atr_dist
+
+# JobInvolvement %: 46.808511% @ 4 variables (Smaller samle but generally right)
+table(Attrition$JobInvolvement,Attrition$Attrition)
+JobInvolvement_atr = table(Attrition$JobInvolvement,Attrition$Attrition)
+JobInvolvement_atr_dist = prop.table(JobInvolvement_atr, 1) *100
+JobInvolvement_atr_dist
+
+# JobLevel %: 26.139818% at large sample(good variable)
+table(Attrition$JobLevel,Attrition$Attrition)
+JobLevel_atr = table(Attrition$JobLevel,Attrition$Attrition)
+JobLevel_atr_dist = prop.table(JobLevel_atr, 1) *100
+JobLevel_atr_dist
+
+# JobRole %: 45.283019% @ Sales rep (Low Job level Sales Dept,  identified)
+table(Attrition$JobRole,Attrition$Attrition)
+JobRole_atr = table(Attrition$JobRole,Attrition$Attrition)
+JobRole_atr_dist = prop.table(JobRole_atr, 1) *100
+JobRole_atr_dist
+
+# We can see that department plays a major role, especially in sales. HR only has Attrition for level 1
+p = Attrition |>
+  group_by(JobLevel, Attrition, Department) |>
+  summarise(count = n(), .groups = 'drop') |>
+  ggplot(aes(x = factor(JobLevel), y = count, fill = Attrition)) +
+  geom_bar(stat = "identity", position = "fill") +  
+  scale_y_continuous(labels = scales::percent_format()) + 
+  labs(title = "Attrition by Job Level (Proportion) by Department", x = "Job Level", y = "Proportion") +
+  theme_minimal() +
+  facet_wrap(~ Department)  
+  ggplotly(p)
+  
+# JobSatisfaction %: 21.22905% at low satisfaction (Makes sense but doesn't really surprise us)
+table(Attrition$JobSatisfaction,Attrition$Attrition)
+JobSatisfaction_atr = table(Attrition$JobSatisfaction,Attrition$Attrition)
+JobSatisfaction_atr_dist = prop.table(JobSatisfaction_atr, 1) *100
+JobSatisfaction_atr_dist
+
+table(Attrition$JobSatisfaction,Attrition$Department)
+
+# Marital Status %: 26.022305% on single (Makes sense, probally not paying for as much and ease to move around country/ jobs)
+table(Attrition$MaritalStatus,Attrition$Attrition)
+MaritalStatus_atr = table(Attrition$MaritalStatus,Attrition$Attrition)
+MaritalStatus_atr_dist = prop.table(MaritalStatus_atr, 1) *100
+MaritalStatus_atr_dist
+
+# NumCompaniesWorked %: 25.581395% lots of high turns with 1 other company or more than 5 (5-9)
+table(Attrition$NumCompaniesWorked,Attrition$Attrition)
+NumCompaniesWorked_atr = table(Attrition$NumCompaniesWorked,Attrition$Attrition)
+NumCompaniesWorked_atr_dist = prop.table(NumCompaniesWorked_atr, 1) *100
+NumCompaniesWorked_atr_dist
+
+# OverTime %: 31.746032% High chance of turn on yes (Good variable, need to check with other jobs)
+table(Attrition$OverTime,Attrition$Attrition)
+OverTime_atr = table(Attrition$OverTime,Attrition$Attrition)
+OverTime_atr_dist = prop.table(OverTime_atr, 1) *100
+OverTime_atr_dist
+
+table(Attrition$OverTime, Attrition$JobLevel)
+
+# PercentSalaryHike %: Not a great variable by itself
+table(Attrition$PercentSalaryHike,Attrition$Attrition)
+PercentSalaryHike_atr = table(Attrition$PercentSalaryHike,Attrition$Attrition)
+PercentSalaryHike_atr_dist = prop.table(PercentSalaryHike_atr, 1) *100
+PercentSalaryHike_atr_dist
+
+# StockOptionLevel %: 25.857520% suprised by high option level leaving, maybe retiring?
+table(Attrition$StockOptionLevel,Attrition$Attrition)
+StockOptionLevel_atr = table(Attrition$StockOptionLevel,Attrition$Attrition)
+StockOptionLevel_atr_dist = prop.table(StockOptionLevel_atr, 1) *100
+StockOptionLevel_atr_dist
+
+# RelationshipSatisfaction %: 20.11494 not great by itself
+table(Attrition$RelationshipSatisfaction,Attrition$Attrition)
+RelationshipSatisfaction_atr = table(Attrition$RelationshipSatisfaction,Attrition$Attrition)
+RelationshipSatisfaction_atr_dist = prop.table(RelationshipSatisfaction_atr, 1) *100
+RelationshipSatisfaction_atr_dist
+
+# TotalWorkingYears %: 24.427481 in 1-5 yr band
+Attrition$Work_Years_Band <- cut(Attrition$TotalWorkingYears, 
+                         breaks = c(1, 5, 10, 15, 20, 25, 30, 35, 40), 
+                         labels = c("1-5", "6-10", "11-15","16-20", "21-25", "26-30", "31-35", "36-40"))
+table(Attrition$Work_Years_Band,Attrition$Attrition)
+TotalWorkingYears_atr = table(Attrition$Work_Years_Band,Attrition$Attrition)
+TotalWorkingYears_atr_dist = prop.table(TotalWorkingYears_atr, 1) *100
+TotalWorkingYears_atr_dist
+
+# TrainingTimesLastYear %: 26.666667 not best identifier by itself
+table(Attrition$TrainingTimesLastYear,Attrition$Attrition)
+TrainingTimesLastYear_atr = table(Attrition$TrainingTimesLastYear,Attrition$Attrition)
+TrainingTimesLastYear_atr_dist = prop.table(TrainingTimesLastYear_atr, 1) *100
+TrainingTimesLastYear_atr_dist
+
+# WorkLifeBalance %: 35.41667 not best identifier by itself, low sample
+table(Attrition$WorkLifeBalance,Attrition$Attrition)
+WorkLifeBalance_atr = table(Attrition$WorkLifeBalance,Attrition$Attrition)
+WorkLifeBalance_atr_dist = prop.table(WorkLifeBalance_atr, 1) *100
+WorkLifeBalance_atr_dist
+
+# YearsAtCompany %: decent variable
+table(Attrition$YearsAtCompany,Attrition$Attrition)
+YearsAtCompany_atr = table(Attrition$YearsAtCompany,Attrition$Attrition)
+YearsAtCompany_atr_dist = prop.table(YearsAtCompany_atr, 1) *100
+YearsAtCompany_atr_dist
+
+# YearsInCurrentRole %: decent variable
+table(Attrition$YearsInCurrentRole,Attrition$Attrition)
+YearsInCurrentRole_atr = table(Attrition$YearsInCurrentRole,Attrition$Attrition)
+YearsInCurrentRole_atr_dist = prop.table(YearsInCurrentRole_atr, 1) *100
+YearsInCurrentRole_atr_dist
+
+# YearsSinceLastPromotion %: decent variable
+table(Attrition$YearsSinceLastPromotion,Attrition$Attrition)
+YearsSinceLastPromotion_atr = table(Attrition$YearsSinceLastPromotion,Attrition$Attrition)
+YearsSinceLastPromotion_atr_dist = prop.table(YearsSinceLastPromotion_atr, 1) *100
+YearsSinceLastPromotion_atr_dist
+
+# YearsWithCurrManager %: decent variable
+table(Attrition$YearsWithCurrManager,Attrition$Attrition)
+YearsWithCurrManager_atr = table(Attrition$YearsWithCurrManager,Attrition$Attrition)
+YearsWithCurrManager_atr_dist = prop.table(YearsWithCurrManager_atr, 1) *100
+YearsWithCurrManager_atr_dist
+
+# MonthlyIncome %: decent variable
+Attrition$MonthlyIncome_Band <- cut(Attrition$MonthlyIncome, 
+                         breaks = c(0, 4999, 9999,  14999, 20000), 
+                         labels = c("0-4999", "5000-9999", "10k-14.9k","15k-20k"))
+table(Attrition$MonthlyIncome_Band,Attrition$Attrition)
+MonthlyIncome_atr = table(Attrition$MonthlyIncome_Band,Attrition$Attrition)
+MonthlyIncome_atr_dist = prop.table(MonthlyIncome_atr, 1) *100
+MonthlyIncome_atr_dist
+```
+
+## Factor 1: Overtime
+
+```{r}
+# viz 1
+summary_data = Attrition |>
+  group_by(OverTime, Attrition) |>
+  summarise(count = n(), .groups = 'drop') |>
+  mutate(percent = count / sum(count))  
+  ggplot(summary_data, aes(x = OverTime, y = count, fill = Attrition, 
+                              text = paste("Count:", count))) +  
+  geom_bar(stat = "identity", position = "fill") +  
+  scale_y_continuous(labels = percent_format()) + 
+  labs(title = "Attrition: By OverTime",
+       x = "OverTime",
+       y = "Proportion") +
+  theme_solarized_2() +
+  scale_fill_manual(values = c("Yes" = scales::alpha("#EB172B", 0.75), "No" = scales::alpha("#F3AF49", 0.75))) +  
+  theme(
+    plot.title = element_text(hjust = 0.5, margin = margin(b = 20)),  
+    plot.margin = margin(t = 20, r = 10, b = 10, l = 10)
+  ) +  
+  geom_text(aes(label = count), position = position_fill(vjust = 0.5), color = "white", size = 4)  
+
+
+  
+  
+# viz 2
+summary_data2 = Attrition |>
+  group_by(JobLevel, OverTime, Attrition) |>
+  summarise(count = n(), .groups = 'drop') |>
+  mutate(percent = count / sum(count))  
+  ggplot(summary_data2, aes(x = OverTime, y = count, fill = Attrition, 
+                              text = paste("Count:", count))) +  
+  geom_bar(stat = "identity", position = "fill") +  
+  scale_y_continuous(labels = percent_format()) + 
+  labs(title = "Attrition: By OverTime & Job Level",
+       x = "OverTime",
+       y = "Proportion") +
+  theme_solarized_2() +
+  scale_fill_manual(values = c("Yes" = scales::alpha("#EB172B", 0.75), "No" = scales::alpha("#F3AF49", 0.75))) +  
+  theme(
+    plot.title = element_text(hjust = 0.5, margin = margin(b = 20)),  
+    plot.margin = margin(t = 20, r = 10, b = 10, l = 10)
+  ) +  
+  geom_text(aes(label = count), position = position_fill(vjust = 0.5), color = "white", size = 4) +  
+  facet_wrap(~ JobLevel)  
+
+# viz 3
+summary_data3 = Attrition |>
+  group_by(JobLevel, Attrition, Department, OverTime) |>
+  summarise(count = n(), .groups = 'drop') |>
+  mutate(percent = count / sum(count))  
+  ggplot(summary_data3, aes(x = factor(JobLevel), y = count, fill = Attrition, 
+                              text = paste("Count:", count))) +  
+  geom_bar(stat = "identity", position = "fill") +  
+  scale_y_continuous(labels = percent_format()) + 
+  labs(title = "Attrition: By Job Level, Department and OverTime",
+       x = "Job Level",
+       y = "Proportion") +
+  theme_solarized_2() +
+  scale_fill_manual(values = c("Yes" = scales::alpha("#EB172B", 0.75), "No" = scales::alpha("#F3AF49", 0.75))) +  
+  theme(
+    plot.title = element_text(hjust = 0.5, margin = margin(b = 20)),  
+    plot.margin = margin(t = 20, r = 10, b = 10, l = 10)
+  ) +  
+  facet_wrap(~ Department + OverTime) +  
+  geom_text(aes(label = count), position = position_fill(vjust = 0.5), color = "white", size = 4)  
+```
+
+## Factor 2: Business Travel by Age Band
+```{r}
+# Viz 1
+Attrition$Age_Band = cut(Attrition$Age, 
+                         breaks = c(0, 29, 49,  60), 
+                         labels = c("18-29", "30-49", "50-60"))
+  summary_data = Attrition |>
+  group_by(Age_Band, Attrition) |>
+  summarise(count = n(), .groups = 'drop') |>
+  mutate(percent = count / sum(count))  
+  ggplot(summary_data, aes(x = Age_Band, y = count, fill = Attrition, 
+                              text = paste("Count:", count))) + 
+  geom_bar(stat = "identity", position = "fill") +  
+  scale_y_continuous(labels = percent_format()) + 
+  labs(title = "Attrition: By Age Band",
+       x = "Age",
+       y = "Proportion") +
+  theme_solarized_2() +
+  scale_fill_manual(values = c("Yes" = scales::alpha("#EB172B", 0.75), "No" = scales::alpha("#F3AF49", 0.75))) +  
+  theme(
+    plot.title = element_text(hjust = 0.5, margin = margin(b = 20)),  
+    plot.margin = margin(t = 20, r = 10, b = 10, l = 10)
+  ) +  
+  geom_text(aes(label = count), position = position_fill(vjust = 0.5), color = "white", size = 4) 
+
+
+# Viz 2
+summary_data2 = Attrition |>
+  group_by(Age_Band, BusinessTravel, Attrition) |>
+  summarise(count = n(), .groups = 'drop') |>
+  mutate(percent = count / sum(count))  
+  ggplot(summary_data2, aes(x = Age_Band, y = count, fill = Attrition, 
+                              text = paste("Count:", count))) +  
+  geom_bar(stat = "identity", position = "fill") +  
+  scale_y_continuous(labels = percent_format()) + 
+  labs(title = "Attrition: By Business Travel and Age Band",
+       x = "Age",
+       y = "Proportion") +
+  theme_solarized_2() +
+  scale_fill_manual(values = c("Yes" = scales::alpha("#EB172B", 0.75), "No" = scales::alpha("#F3AF49", 0.75))) +  
+  theme(
+    plot.title = element_text(hjust = 0.5, margin = margin(b = 20)),  
+    plot.margin = margin(t = 20, r = 10, b = 10, l = 10)
+  ) +  
+  geom_text(aes(label = count), position = position_fill(vjust = 0.5), color = "white", size = 4) +  #
+  facet_wrap(~ BusinessTravel)  
+
+# viz 3
+summary_data3 = Attrition |>
+  group_by(Age_Band, Attrition, BusinessTravel, Department) |>
+  summarise(count = n(), .groups = 'drop') |>
+  mutate(percent = count / sum(count))
+  ggplot(summary_data3, aes(x = factor(Age_Band), y = count, fill = Attrition,
+                              text = paste("Count:", count))) +
+  geom_bar(stat = "identity", position = "fill") +
+  scale_y_continuous(labels = percent_format()) +
+  labs(title = "Attrition: By Age Band, Business Travel and Gender",
+       x = "Age",
+       y = "Proportion") +
+  theme_solarized_2() +
+  scale_fill_manual(values = c("Yes" = scales::alpha("#EB172B", 0.75), "No" = scales::alpha("#F3AF49", 0.75))) +
+  theme(
+    plot.title = element_text(hjust = 0.5, margin = margin(b = 20)),
+    plot.margin = margin(t = 20, r = 10, b = 10, l = 10)
+  ) +
+  facet_wrap(~ Department + BusinessTravel) +
+  geom_text(aes(label = count), position = position_fill(vjust = 0.5), color = "white", size = 4)
+
+```
+
+## Factor 3:
+
+```{r}
+# Viz 1
+Attrition$MonthlyIncome_Band <- cut(Attrition$MonthlyIncome, 
+                         breaks = c(0, 4999, 9999,  14999, 20000), 
+                         labels = c("< $5k", "$5k-$9.9k", "$10k-$14.9k","> $15k"))
+  summary_data = Attrition |>
+  group_by(MonthlyIncome_Band, Attrition) |>
+  summarise(count = n(), .groups = 'drop') |>
+  mutate(percent = count / sum(count))  
+  ggplot(summary_data, aes(x = MonthlyIncome_Band, y = count, fill = Attrition, 
+                              text = paste("Count:", count))) + 
+  geom_bar(stat = "identity", position = "fill") +  
+  scale_y_continuous(labels = percent_format()) + 
+  labs(title = "Attrition: By Monthly Income",
+       x = "Monthly Income",
+       y = "Proportion") +
+  theme_solarized_2() +
+  scale_fill_manual(values = c("Yes" = scales::alpha("#EB172B", 0.75), "No" = scales::alpha("#F3AF49", 0.75))) +  
+  theme(
+    plot.title = element_text(hjust = 0.5, margin = margin(b = 20)),  
+    plot.margin = margin(t = 20, r = 10, b = 10, l = 10)
+  ) +  
+  geom_text(aes(label = count), position = position_fill(vjust = 0.5), color = "white", size = 4) 
+  
+# Viz 2
+Attrition$Distance_Band <- cut(Attrition$DistanceFromHome, 
+                         breaks = c(0, 10, 20, 30), 
+                         labels = c("1-10", "11-20", "21-30"))
+summary_data2 = Attrition |>
+  group_by(MonthlyIncome_Band, Attrition, Distance_Band) |>
+  summarise(count = n(), .groups = 'drop') |>
+  mutate(percent = count / sum(count))  
+  ggplot(summary_data2, aes(x = Distance_Band, y = count, fill = Attrition, 
+                              text = paste("Count:", count))) + 
+  geom_bar(stat = "identity", position = "fill") +  
+  scale_y_continuous(labels = percent_format()) + 
+  labs(title = "Attrition: By Monthly Income & Distance from Home",
+       x = "Distance",
+       y = "Proportion") +
+  theme_solarized_2() +
+  scale_fill_manual(values = c("Yes" = scales::alpha("#EB172B", 0.75), "No" = scales::alpha("#F3AF49", 0.75))) +  
+  theme(
+    plot.title = element_text(hjust = 0.5, margin = margin(b = 20)),  
+    plot.margin = margin(t = 20, r = 10, b = 10, l = 10)
+  ) +  
+  geom_text(aes(label = count), position = position_fill(vjust = 0.5), color = "white", size = 4) +
+  facet_wrap(~ MonthlyIncome_Band)  
+  
+# Viz 3
+Attrition$Age_Band = cut(Attrition$Age, 
+                         breaks = c(0, 29, 49,  60), 
+                         labels = c("18-29", "30-49", "50-60"))
+summary_data2 = Attrition |>
+  group_by(MonthlyIncome_Band, Attrition, Age_Band) |>
+  summarise(count = n(), .groups = 'drop') |>
+  mutate(percent = count / sum(count))  
+  ggplot(summary_data2, aes(x = Age_Band, y = count, fill = Attrition, 
+                              text = paste("Count:", count))) + 
+  geom_bar(stat = "identity", position = "fill") +  
+  scale_y_continuous(labels = percent_format()) + 
+  labs(title = "Attrition: By Monthly Income & Age",
+       x = "Age",
+       y = "Proportion") +
+  theme_solarized_2() +
+  scale_fill_manual(values = c("Yes" = scales::alpha("#EB172B", 0.75), "No" = scales::alpha("#F3AF49", 0.75))) +  
+  theme(
+    plot.title = element_text(hjust = 0.5, margin = margin(b = 20)),  
+    plot.margin = margin(t = 20, r = 10, b = 10, l = 10)
+  ) +  
+  geom_text(aes(label = count), position = position_fill(vjust = 0.5), color = "white", size = 4) +
+  facet_wrap(~ MonthlyIncome_Band)  
+```
+
+## Attrition model: Naive Bayes
+```{r}
+# Load data
+Attrition = read.csv("/Users/jackkorbitz/School/MSDS_6306/Unit 8/CaseStudy1-data.csv", header = TRUE)
+
+# Define the columns in the model (not shown the amount of combinations tried...)
+# Excludes to not be used 1,3,10,11
+cols_to_use = c(2  # Age
+               ,4  # BusinessTravel
+             # ,5  # DailyRate
+             # ,6  # Department
+               ,7  # DistanceFromHome
+             # ,8  # Education
+             # ,9  # EducationField
+             # ,10 # EmployeeCount
+             # ,11 # EmployeeNumber
+               ,12 # EnvironmentSatisfaction
+             # ,13 # Gender
+             # ,14 # HourlyRate
+               ,15 # JobInvolvement
+               ,16 # JobLevel
+               ,17 # JobRole
+               ,18 # JobSatisfaction
+               ,19 # MaritalStatus
+               ,20 # MonthlyIncome
+             # ,21 # MonthlyRate
+               ,22 # NumCompaniesWorked
+             # ,23 # Over18
+               ,24 # OverTime
+             # ,25 # PercentSalaryHike
+             # ,26 # PerformanceRating
+               ,27 # RelationshipSatisfaction
+             # ,28 # StandardHours    
+               ,29 # StockOptionLevel
+               ,30 # TotalWorkingYears
+             # ,31 # TrainingTimesLastYear
+               ,32 # WorkLifeBalance
+               ,33 # YearsAtCompany
+               ,34 # YearsInCurrentRole
+             # ,35 # YearsSinceLastPromotion
+               ,36 # YearsWithCurrManager
+               )
+
+set.seed(4)
+trainIndices = sample(seq(1:nrow(Attrition)), round(0.7 * nrow(Attrition)))
+trainAttrition = Attrition[trainIndices, ]
+testAttrition = Attrition[-trainIndices, ]
+
+# Build the model
+model = naiveBayes(trainAttrition[, cols_to_use], trainAttrition$Attrition)
+predictions = predict(model, testAttrition[, cols_to_use])
+CM = confusionMatrix(table(predictions, testAttrition$Attrition))
+CM
+
+iterations = 100
+masterAcc = matrix(nrow = iterations)
+masterSen = matrix(nrow = iterations)
+masterSpec = matrix(nrow = iterations)
+
+for (i in 1:iterations) {
+  
+  trainIndices = sample(seq(1:length(Attrition$Age)), round(0.7 * length(Attrition$Age)))
+  trainAttrition = Attrition[trainIndices, ]
+  testAttrition = Attrition[-trainIndices, ]
+  
+  model = naiveBayes(trainAttrition[, cols_to_use], trainAttrition$Attrition)
+  predictions = predict(model, testAttrition[, cols_to_use])
+  CM = confusionMatrix(table(predictions, testAttrition$Attrition))
+  
+  masterAcc[i] = CM$overall["Accuracy"]
+  masterSen[i] = CM$byClass["Sensitivity"]
+  masterSpec[i] = CM$byClass["Specificity"]
+}
+
+# Calculate and print the results
+MeanAcc = colMeans(masterAcc)
+MeanSen = colMeans(masterSen)
+MeanSpec = colMeans(masterSpec)
+
+cat("Average Accuracy:", MeanAcc, "\n")
+cat("Average Sensitivity:", MeanSen, "\n")
+cat("Average Specificity:", MeanSpec, "\n")
+
+
+
+# Now lets add in the challenge set 
+CompSet = read.csv("/Users/jackkorbitz/School/MSDS_6306/Unit 8/CaseStudy1CompSet No Attrition.csv", header = TRUE)
+
+# Define the columns in the model (excluding those that won't be used)
+cols_to_use = c("Age"
+               ,"BusinessTravel"
+               ,"DistanceFromHome"
+               ,"EnvironmentSatisfaction"
+               ,"JobInvolvement"
+               ,"JobLevel"
+               ,"JobRole"
+               ,"JobSatisfaction"
+               ,"MaritalStatus"
+               ,"MonthlyIncome"
+               ,"NumCompaniesWorked"
+               ,"OverTime"
+               ,"RelationshipSatisfaction"
+               ,"StockOptionLevel"
+               ,"TotalWorkingYears"
+               ,"WorkLifeBalance"
+               ,"YearsAtCompany"
+               ,"YearsInCurrentRole"
+               ,"YearsWithCurrManager"
+               )
+
+# Train the model on the original dataset
+set.seed(4)
+trainIndices = sample(seq(1:nrow(Attrition)), round(0.7 * nrow(Attrition)))
+trainAttrition = Attrition[trainIndices, ]
+# testAttrition = Attrition[-trainIndices, ]  # Not used for prediction
+
+# Build the model
+model = naiveBayes(trainAttrition[, cols_to_use], trainAttrition$Attrition)
+
+# Predict on the new dataset
+predictions = predict(model, CompSet[, cols_to_use])
+
+# Combine predictions with ID from the new dataset
+results = data.frame(ID = CompSet$ID, Predicted_Attrition = predictions)
+
+# View results
+print(results)
+
+# If you want to save the results to a CSV file:
+write.csv(results, "/Users/jackkorbitz/School/MSDS_6306/Unit 8/Case1PredictionsKorbitz Attrition.csv", row.names = FALSE)
+```

@@ -289,7 +289,7 @@ summary_data3 = Attrition |>
                               text = paste("Count:", count))) +  
   geom_bar(stat = "identity", position = "fill") +  
   scale_y_continuous(labels = percent_format()) + 
-  labs(title = "Attrition: By Job Level, Department and OverTime",
+  labs(title = "Attrition: By OverTime, Job Level, and Department",
        x = "Job Level",
        y = "Proportion") +
   theme_solarized_2() +
@@ -298,7 +298,7 @@ summary_data3 = Attrition |>
     plot.title = element_text(hjust = 0.5, margin = margin(b = 20)),  
     plot.margin = margin(t = 20, r = 10, b = 10, l = 10)
   ) +  
-  facet_wrap(~ Department + OverTime) +  
+  facet_wrap(~  OverTime + Department) +  
   geom_text(aes(label = count), position = position_fill(vjust = 0.5), color = "white", size = 4)  
 ```
 
@@ -447,7 +447,7 @@ summary_data2 = Attrition |>
   facet_wrap(~ MonthlyIncome_Band)  
 ```
 
-## Attrition model: Naive Bayes
+## Attrition model: Naive Bayes tuned
 ```{r}
 # Load data
 Attrition = read.csv("/Users/jackkorbitz/School/MSDS_6306/Unit 8/CaseStudy1-data.csv", header = TRUE)
@@ -577,4 +577,86 @@ print(results)
 
 # If you want to save the results to a CSV file:
 write.csv(results, "/Users/jackkorbitz/School/MSDS_6306/Unit 8/Case1PredictionsKorbitz Attrition.csv", row.names = FALSE)
+```
+## scrapped model:all outputs
+### Didnt meet 60% Specificity on 100 itterations
+```{r}
+# Load data
+Attrition = read.csv("/Users/jackkorbitz/School/MSDS_6306/Unit 8/CaseStudy1-data.csv", header = TRUE)
+
+# Define the columns in the model (not shown the amount of combinations tried...)
+# Excludes to not be used 1,3,10,11
+cols_to_use = c(2  # Age
+               ,4  # BusinessTravel
+               ,5  # DailyRate
+               ,6  # Department
+               ,7  # DistanceFromHome
+               ,8  # Education
+               ,9  # EducationField
+               ,12 # EnvironmentSatisfaction
+               ,13 # Gender
+               ,14 # HourlyRate
+               ,15 # JobInvolvement
+               ,16 # JobLevel
+               ,17 # JobRole
+               ,18 # JobSatisfaction
+               ,19 # MaritalStatus
+               ,20 # MonthlyIncome
+               ,21 # MonthlyRate
+               ,22 # NumCompaniesWorked
+               ,23 # Over18
+               ,24 # OverTime
+               ,25 # PercentSalaryHike
+               ,26 # PerformanceRating
+               ,27 # RelationshipSatisfaction
+               ,28 # StandardHours    
+               ,29 # StockOptionLevel
+               ,30 # TotalWorkingYears
+               ,31 # TrainingTimesLastYear
+               ,32 # WorkLifeBalance
+               ,33 # YearsAtCompany
+               ,34 # YearsInCurrentRole
+               ,35 # YearsSinceLastPromotion
+               ,36 # YearsWithCurrManager
+               )
+
+set.seed(4)
+trainIndices = sample(seq(1:nrow(Attrition)), round(0.7 * nrow(Attrition)))
+trainAttrition = Attrition[trainIndices, ]
+testAttrition = Attrition[-trainIndices, ]
+
+# Build the model
+model = naiveBayes(trainAttrition[, cols_to_use], trainAttrition$Attrition)
+predictions = predict(model, testAttrition[, cols_to_use])
+CM = confusionMatrix(table(predictions, testAttrition$Attrition))
+CM
+
+iterations = 100
+masterAcc = matrix(nrow = iterations)
+masterSen = matrix(nrow = iterations)
+masterSpec = matrix(nrow = iterations)
+
+for (i in 1:iterations) {
+  
+  trainIndices = sample(seq(1:length(Attrition$Age)), round(0.7 * length(Attrition$Age)))
+  trainAttrition = Attrition[trainIndices, ]
+  testAttrition = Attrition[-trainIndices, ]
+  
+  model = naiveBayes(trainAttrition[, cols_to_use], trainAttrition$Attrition)
+  predictions = predict(model, testAttrition[, cols_to_use])
+  CM = confusionMatrix(table(predictions, testAttrition$Attrition))
+  
+  masterAcc[i] = CM$overall["Accuracy"]
+  masterSen[i] = CM$byClass["Sensitivity"]
+  masterSpec[i] = CM$byClass["Specificity"]
+}
+
+# Calculate and print the results
+MeanAcc = colMeans(masterAcc)
+MeanSen = colMeans(masterSen)
+MeanSpec = colMeans(masterSpec)
+
+cat("Average Accuracy:", MeanAcc, "\n")
+cat("Average Sensitivity:", MeanSen, "\n")
+cat("Average Specificity:", MeanSpec, "\n")
 ```

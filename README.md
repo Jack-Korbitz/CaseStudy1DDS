@@ -2,6 +2,7 @@
 ---
 
 # Frito Lay Attrition Case Study
+### Video Link
 
 This repository is designed for a case study focused on predicting employee attrition for Frito Lay. This project includes data exploration, visualizations, and predictive modeling to help the executive team understand the key factors driving attrition within the company.
 
